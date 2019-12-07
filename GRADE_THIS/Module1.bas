@@ -1,0 +1,325 @@
+Attribute VB_Name = "Module1"
+Sub Stock_Ticker()
+Dim ws As Worksheet
+Dim ticker_input(), ticker_distinct(), r As Long
+Dim dummy As Integer
+dummy = 0
+Dim Top_Row As Long, Bottom_Row As Long
+Dim HeaderRow As Long, LastFilterRow As Long
+Dim rngdb As Range
+Dim Stock_Date As Long, FirstDayOpeningPrice As Double, LastDayClosingPrice As Double, TotalStockVol As Variant
+Dim Percent_rng()
+Dim Volume_rng()
+
+' This section clears the column-I through P , the results from the previous run to prepare to populate the distinct ticker
+For Each ws In Worksheets
+    Sheets(ws.Name).Activate
+    Application.ScreenUpdating = True
+    Application.EnableEvents = True
+    Columns("I:P").EntireColumn.Delete
+    'Application.ScreenUpdating = False
+    'Application.EnableEvents = False
+Next ws
+
+' This section removes all the filter on the active worksheet
+ActiveSheet.AutoFilterMode = False
+
+' This section stops screen refresh
+For Each ws In Worksheets
+    
+    UserForm1.Label7.Caption = "Working on Sheet - " & ws.Name
+    For a = 1 To 200
+    DoEvents
+    Next a
+
+        
+    Application.ScreenUpdating = True
+    Application.EnableEvents = True
+    Sheets(ws.Name).Activate
+    Application.ScreenUpdating = False
+    Application.EnableEvents = False
+
+' This section creates an array of the Ticker symbols in Column-A
+ticker_input = ActiveSheet.UsedRange.Columns(1).Value
+'MsgBox (LBound(ticker_input))
+'MsgBox (UBound(ticker_input))
+
+' An userform is instantiated to show progress
+    UserForm1.Show
+    'MsgBox ("Userform")
+    UserForm1.Label1.Width = 5
+        UserForm1.Label3.Width = 5
+            UserForm1.Label6.Width = 5
+    DoEvents
+
+
+'This section creates an array of distinct ticker symbols
+'Updating the progress chart
+    
+    For a = 1 To 10
+    DoEvents
+    Next a
+    UserForm1.Label3.Width = 5
+
+ReDim Preserve ticker_distinct(0)
+ticker_distinct(0) = Range("A1").Value
+ReDim Preserve ticker_distinct(UBound(ticker_distinct) + 1)
+ticker_distinct(UBound(ticker_distinct)) = Range("A2").Value
+'MsgBox ("crossed-10")
+For m = 1 To UBound(ticker_input)
+
+    If m < Round(UBound(ticker_input) * 0.2) + 2 And m > Round(UBound(ticker_input) * 0.2) Then
+    For a = 1 To 200
+    DoEvents
+    Next a
+    UserForm1.Label3.Width = 40
+    ElseIf m < Round(UBound(ticker_input) * 0.4) + 2 And m > Round(UBound(ticker_input) * 0.4) Then
+    For a = 1 To 200
+    DoEvents
+    Next a
+    UserForm1.Label3.Width = 80
+    ElseIf m < Round(UBound(ticker_input) * 0.6) + 2 And m > Round(UBound(ticker_input) * 0.6) Then
+    For a = 1 To 200
+    DoEvents
+    Next a
+    UserForm1.Label3.Width = 120
+    ElseIf m < Round(UBound(ticker_input) * 0.8) + 2 And m > Round(UBound(ticker_input) * 0.8) Then
+    For a = 1 To 200
+    DoEvents
+    Next a
+    UserForm1.Label3.Width = 160
+        
+    End If
+
+    If IsInArray(ticker_input(m, 1), ticker_distinct) Then
+        dummy = dummy
+    Else
+        ReDim Preserve ticker_distinct(UBound(ticker_distinct) + 1)
+        ticker_distinct(UBound(ticker_distinct)) = Range("A" & m).Value
+
+    End If
+    
+Next m
+
+'This Section creates the header
+Range("I1").Value = "Ticker"
+Range("J1").Value = "Yearly Change"
+Range("K1").Value = "Percent Change"
+Range("L1").Value = "Total Stock Volume"
+
+'This section writes the distinct ticker symbols in Column-I
+   
+    UserForm1.Label3.Width = 200
+    UserForm1.Label6.Width = 50
+    UserForm1.Label1.Width = 5
+    For a = 1 To 10
+    DoEvents
+    Next a
+    
+For n = 1 To UBound(ticker_distinct)
+    Range("I" & n + 1) = ticker_distinct(n)
+Next n
+
+' The loop below iterates for each ticker symbol and fethes the three metrics
+' Yearly change, Percentage change and Total Volume
+
+'Paints Progress bar
+
+For o = 1 To UBound(ticker_distinct)
+    
+    If o < Round(UBound(ticker_distinct) * 0.2) + 2 And o > Round(UBound(ticker_distinct) * 0.2) Then
+    For a = 1 To 100
+    DoEvents
+    Next a
+    UserForm1.Label1.Width = 40
+    ElseIf o < Round(UBound(ticker_distinct) * 0.4) + 2 And o > Round(UBound(ticker_distinct) * 0.4) Then
+    For a = 1 To 100
+    DoEvents
+    Next a
+    UserForm1.Label1.Width = 80
+    ElseIf o < Round(UBound(ticker_distinct) * 0.6) + 2 And o > Round(UBound(ticker_distinct) * 0.6) Then
+    For a = 1 To 100
+    DoEvents
+    Next a
+    UserForm1.Label1.Width = 120
+    ElseIf o < Round(UBound(ticker_distinct) * 0.8) + 2 And o > Round(UBound(ticker_distinct) * 0.8) Then
+    For a = 1 To 100
+    DoEvents
+    Next a
+    UserForm1.Label1.Width = 160
+    End If
+    
+' This section filters on Column-A for a given ticker symbol
+' ActiveSheet.AutoFilterMode = False
+ActiveSheet.UsedRange.AutoFilter 1, ticker_distinct(o)
+
+'This section fetches the most recent and the last rows address for a given Ticker symbol
+
+        Top_Row = GetFilteredRangeTopRow()
+        'MsgBox ("Top most Row after filtering for the Ticker is" & Top_Row)
+        Bottom_Row = GetFilteredRangeBottomRow()
+        'MsgBox ("Bottom most Row after filtering for the Ticker is" & Bottom_Row)
+    TotalStockVol = 0
+    
+    For p = Top_Row To Bottom_Row
+        
+'This section finds the Opening Stock price on the first day (it need not be in January), Closing Price AND sums up the stock volume
+        Stock_Date = Range("B" & Top_Row).Value2
+        FirstDayOpeningPrice = Range("C" & Top_Row).Value2
+        LastDayClosingPrice = Range("F" & Top_Row).Value2
+        
+        
+        If Range("A" & p).Value = ticker_distinct(o) Then
+            If Range("B" & p).Value < Stock_Date Then
+                Stock_Date = Range("B" & p).Value2
+                FirstDayOpeningPrice = Range("C" & p).Value2
+            Else
+                LastDayClosingPrice = Range("F" & p).Value2
+            End If
+        TotalStockVol = TotalStockVol + Range("G" & p).Value2
+        End If
+        
+    Next p
+    
+'This section writes the data to the cells and formats it
+
+
+
+    Range("J" & o + 1).Value2 = LastDayClosingPrice - FirstDayOpeningPrice
+    If Range("J" & o + 1).Value2 < 0 Then
+    Range("J" & o + 1).Interior.ColorIndex = 3
+    Else
+    Range("J" & o + 1).Interior.ColorIndex = 4
+    End If
+    If FirstDayOpeningPrice = 0 Then
+    Range("K" & o + 1).Value2 = 0
+    Else
+    Range("K" & o + 1).Value2 = Format((LastDayClosingPrice - FirstDayOpeningPrice) / FirstDayOpeningPrice, "Percent")
+    End If
+    Range("L" & o + 1).Value2 = TotalStockVol
+    
+Next o
+
+    For a = 1 To 100
+    DoEvents
+    Next a
+    UserForm1.Label1.Width = 200
+    UserForm1.Label6.Width = 100
+
+
+' Iterations with all Ticker symbols ends here
+
+' This section removes all the filter on the active worksheet
+ActiveSheet.AutoFilterMode = False
+
+' This section finds the highest, lowest % changes and the stock with the highest volume traded
+
+'This Section creates the header
+Range("O1").Value = "Ticker"
+Range("P1").Value = "Value"
+
+    For a = 1 To 100
+    DoEvents
+    Next a
+    UserForm1.Label6.Width = 125
+
+Percent_rng = ActiveSheet.UsedRange.Columns(11).Value
+'MsgBox ("Min " & Application.WorksheetFunction.Min(Percent_rng))
+Volume_rng = ActiveSheet.UsedRange.Columns(12).Value
+
+'This section finds the Ticker with the greatest increse in % and writes it
+For MaxRow = 2 To UBound(Percent_rng)
+    If Range("K" & MaxRow) = Application.WorksheetFunction.Max(Percent_rng) Then
+    Exit For
+    End If
+Next MaxRow
+
+    Range("N2").Value2 = "Greatest % Increase"
+    Range("O2").Value2 = Range("I" & MaxRow).Value2
+    Range("P2").Value2 = Format(Range("K" & MaxRow).Value2, "Percent")
+    
+    For a = 1 To 100
+    DoEvents
+    Next a
+    UserForm1.Label6.Width = 150
+
+'This section finds the Ticker with the greatest decrese in % and writes it
+For minrow = 2 To UBound(Percent_rng)
+    If Range("K" & minrow) = Application.WorksheetFunction.Min(Percent_rng) Then
+    Exit For
+    End If
+Next minrow
+
+    Range("N3").Value2 = "Greatest % Decrease"
+    Range("O3").Value2 = Range("I" & minrow).Value2
+    Range("P3").Value2 = Format(Range("K" & minrow).Value2, "Percent")
+    
+    For a = 1 To 100
+    DoEvents
+    Next a
+    UserForm1.Label6.Width = 175
+    
+'This section finds the Ticker with the greatest volume traded and writes it
+For MaxVol = 2 To UBound(Volume_rng)
+    If Range("L" & MaxVol) = Application.WorksheetFunction.Max(Volume_rng) Then
+    Exit For
+    End If
+Next MaxVol
+
+    Range("N4").Value2 = "Greatest Total Volume"
+    Range("O4").Value2 = Range("I" & MaxVol).Value2
+    Range("P4").Value2 = Range("L" & MaxVol).Value2
+
+    For a = 1 To 100
+    DoEvents
+    Next a
+    UserForm1.Label6.Width = 200
+
+' Screen refreshed, Form unloaded
+Application.ScreenUpdating = True
+Application.EnableEvents = True
+Unload UserForm1
+ThisWorkbook.ActiveSheet.Cells.EntireColumn.AutoFit
+
+Next ws
+ 
+    
+End Sub
+
+
+Public Function IsInArray(stringToBeFound As Variant, arr As Variant) As Boolean
+    Dim i
+    'MsgBox ("crossed-15")
+    For i = LBound(arr) To UBound(arr)
+            If arr(i) = stringToBeFound Then
+            IsInArray = True
+            Exit Function
+        End If
+    Next i
+    IsInArray = False
+
+End Function
+
+Public Function GetFilteredRangeTopRow() As Long
+Dim HeaderRow As Long, LastFilterRow As Long
+On Error GoTo NoFilterOnSheet
+With ActiveSheet
+    HeaderRow = .AutoFilter.Range(1).Row
+    LastFilterRow = .Range(Split(.AutoFilter.Range.Address, ":")(1)).Row
+    GetFilteredRangeTopRow = .Range(.Rows(HeaderRow + 1), .Rows(Rows.Count)).SpecialCells(xlCellTypeVisible)(1).Row
+    If GetFilteredRangeTopRow = LastFilterRow + 1 Then GetFilteredRangeTopRow = 0
+End With
+NoFilterOnSheet:
+End Function
+
+Function GetFilteredRangeBottomRow() As Long
+Dim HeaderRow As Long, LastFilteredRow As Long, Addresses() As String
+On Error GoTo NoFilterOnSheet
+With ActiveSheet
+    HeaderRow = .AutoFilter.Range(1).Row
+    LastFilterRow = .Range(Split(.AutoFilter.Range.Address, ":")(1)).Row
+    Addresses = Split(.Range((HeaderRow + 1) & ":" & LastFilterRow).SpecialCells(xlCellTypeVisible).Address, "$")
+    GetFilteredRangeBottomRow = Addresses(UBound(Addresses))
+End With
+NoFilterOnSheet:
+End Function
